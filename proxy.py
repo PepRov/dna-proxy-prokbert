@@ -1,10 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from prokbert.prokbert_tokenizer import ProkBERTTokenizer
-from prokbert.models import BertForBinaryClassificationWithPooling
-import torch
-import torch.nn.functional as F
+from transformers import pipeline
 
 # ------------------------------------------------------------
 # FastAPI setup
@@ -19,19 +16,16 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------
-# Load ProkBERT model once on startup
+# Load pipeline once on startup
 # ------------------------------------------------------------
-finetuned_model = "neuralbioinfo/prokbert-mini-promoter"
-kmer = 6
-shift = 1
-
-tok_params = {'kmer': kmer, 'shift': shift}
-tokenizer = ProkBERTTokenizer(tokenization_params=tok_params)
-model = BertForBinaryClassificationWithPooling.from_pretrained(finetuned_model)
-model.eval()  # Inference mode
+pipe = pipeline(
+    "text-classification",
+    model="neuralbioinfo/prokbert-mini-promoter",
+    trust_remote_code=True
+)
 
 # ------------------------------------------------------------
-# Request model
+# Input data format
 # ------------------------------------------------------------
 class SequenceRequest(BaseModel):
     sequence: str
@@ -41,7 +35,7 @@ class SequenceRequest(BaseModel):
 # ------------------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "ProkBERT promoter classifier running"}
+    return {"message": "ProkBERT promoter classifier running via pipeline"}
 
 # ------------------------------------------------------------
 # Prediction route
@@ -51,34 +45,25 @@ def predict(req: SequenceRequest):
     try:
         sequence = req.sequence.strip().upper()
 
-        # Tokenize
-        inputs = tokenizer(sequence, return_tensors="pt")
-        inputs = {k: v.unsqueeze(0) for k, v in inputs.items()}  # Add batch dim
+        # Run the pipeline
+        result = pipe(sequence)[0]  # Returns dict with 'label' and 'score'
 
-        # Inference
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs["logits"]
+        label = result["label"]      # e.g., "Promoter" or "Non-promoter"
+        confidence = result["score"] # float probability
 
-        # Softmax probabilities
-        probs = F.softmax(logits, dim=-1)
-        prob_promoter = probs[0, 1].item()
-        prob_non_promoter = probs[0, 0].item()
-
-        label = "Promoter" if prob_promoter > prob_non_promoter else "Non-promoter"
-
+        # Log for debugging
         print("Sequence:", sequence)
         print("Label:", label)
-        print("Prob promoter:", prob_promoter)
-        print("Prob non-promoter:", prob_non_promoter)
+        print("Confidence:", confidence)
         print("-------------------------------")
 
         return {
             "sequence": sequence,
             "prediction": label,
-            "confidence": f"{prob_promoter:.4f}" if label == "Promoter" else f"{prob_non_promoter:.4f}"
+            "confidence": f"{confidence:.4f}"
         }
 
     except Exception as e:
         print("Error:", str(e))
         return {"error": str(e)}
+
