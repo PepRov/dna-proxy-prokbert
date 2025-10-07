@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from transformers import pipeline
+import requests
 
 # ------------------------------------------------------------
 # FastAPI setup
@@ -16,15 +16,6 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------
-# Load pipeline once on startup
-# ------------------------------------------------------------
-pipe = pipeline(
-    "text-classification",
-    model="neuralbioinfo/prokbert-mini-promoter",
-    trust_remote_code=True
-)
-
-# ------------------------------------------------------------
 # Input data format
 # ------------------------------------------------------------
 class SequenceRequest(BaseModel):
@@ -35,7 +26,7 @@ class SequenceRequest(BaseModel):
 # ------------------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "ProkBERT promoter classifier running via pipeline"}
+    return {"message": "Proxy server running and forwarding to HF Space"}
 
 # ------------------------------------------------------------
 # Prediction route
@@ -43,15 +34,20 @@ def root():
 @app.post("/predict")
 def predict(req: SequenceRequest):
     try:
-        sequence = req.sequence.strip().upper()
+        sequence = req.sequence.strip()
 
-        # Run the pipeline
-        result = pipe(sequence)[0]  # Returns dict with 'label' and 'score'
+        # HF Space API URL
+        hf_space_url = "https://hf.space/embed/neuralbioinfo/prokbert-mini-promoter/api/predict"
 
-        label = result["label"]      # e.g., "Promoter" or "Non-promoter"
-        confidence = result["score"] # float probability
+        # Forward request to HF Space
+        response = requests.post(hf_space_url, json={"data": [sequence]})
+        response.raise_for_status()
+        hf_result = response.json()
 
-        # Log for debugging
+        # HF Space returns: hf_result["data"] = [[label, confidence]]
+        label, confidence = hf_result["data"][0]
+
+        # Log
         print("Sequence:", sequence)
         print("Label:", label)
         print("Confidence:", confidence)
@@ -60,10 +56,9 @@ def predict(req: SequenceRequest):
         return {
             "sequence": sequence,
             "prediction": label,
-            "confidence": f"{confidence:.4f}"
+            "confidence": confidence
         }
 
     except Exception as e:
         print("Error:", str(e))
         return {"error": str(e)}
-
