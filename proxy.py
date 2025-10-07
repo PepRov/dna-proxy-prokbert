@@ -24,7 +24,7 @@ def predict(req: SequenceRequest):
     sequence = req.sequence.strip()
 
     try:
-        hf_url = "https://hf.space/embed/neuralbioinfo/prokbert-mini-promoter/api/predict"
+        hf_url = "https://prokbert-mini-promoter.neuralbioinfo.hf.space/run/predict"
         response = requests.post(hf_url, json={"data": [sequence]})
         response.raise_for_status()
         hf_result = response.json()
