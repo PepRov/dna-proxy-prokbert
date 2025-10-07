@@ -3,9 +3,6 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 
-# ------------------------------------------------------------
-# FastAPI setup
-# ------------------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -15,44 +12,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------------------------------------------
-# Input data format
-# ------------------------------------------------------------
 class SequenceRequest(BaseModel):
     sequence: str
 
-# ------------------------------------------------------------
-# Root route
-# ------------------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Proxy server running and forwarding to HF Space"}
+    return {"message": "Proxy server running"}
 
-# ------------------------------------------------------------
-# Prediction route
-# ------------------------------------------------------------
 @app.post("/predict")
 def predict(req: SequenceRequest):
+    sequence = req.sequence.strip()
+
     try:
-        sequence = req.sequence.strip()
-
-        # HF Space API URL
-        hf_space_url = "https://hf.space/embed/neuralbioinfo/prokbert-mini-promoter/api/predict"
-
-        # Forward request to HF Space
-        response = requests.post(hf_space_url, json={"data": [sequence]})
+        # Forward to HF Space
+        hf_url = "https://hf.space/embed/neuralbioinfo/prokbert-mini-promoter/api/predict"
+        response = requests.post(hf_url, json={"data": [sequence]})
         response.raise_for_status()
         hf_result = response.json()
 
-        # HF Space returns: hf_result["data"] = [[label, confidence]]
+        # Extract label and confidence
         label, confidence = hf_result["data"][0]
 
-        # Log
-        print("Sequence:", sequence)
-        print("Label:", label)
-        print("Confidence:", confidence)
-        print("-------------------------------")
-
+        # Include input sequence explicitly
         return {
             "sequence": sequence,
             "prediction": label,
@@ -60,5 +41,4 @@ def predict(req: SequenceRequest):
         }
 
     except Exception as e:
-        print("Error:", str(e))
         return {"error": str(e)}
