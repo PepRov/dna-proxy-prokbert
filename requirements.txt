@@ -1,5 +1,4 @@
 fastapi
 uvicorn
-transformers
-prokbert
+requests
 pydantic
