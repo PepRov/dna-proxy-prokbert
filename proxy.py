@@ -24,7 +24,6 @@ def predict(req: SequenceRequest):
     sequence = req.sequence.strip()
 
     try:
-        # Forward to HF Space
         hf_url = "https://hf.space/embed/neuralbioinfo/prokbert-mini-promoter/api/predict"
         response = requests.post(hf_url, json={"data": [sequence]})
         response.raise_for_status()
@@ -33,7 +32,6 @@ def predict(req: SequenceRequest):
         # Extract label and confidence
         label, confidence = hf_result["data"][0]
 
-        # Include input sequence explicitly
         return {
             "sequence": sequence,
             "prediction": label,
